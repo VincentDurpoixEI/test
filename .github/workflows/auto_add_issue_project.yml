@@ -1,0 +1,54 @@
+name: Auto-add issues to last created project
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  add-to-last-project:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Add issue to last created project
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const columnName = 'To do'; // Nom de la colonne
+
+          // Récupérer la liste des projets pour le dépôt
+          console.log('owner :',context.repo.owner);
+          console.log('owner :',context.repo.repo);
+          const projects = await github.rest.projects.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+
+
+          if (projects.data.length === 0) {
+            throw new Error(`Aucun projet trouvé dans le dépôt.`);
+          }
+          
+          // Trouver le dernier projet créé (en triant par date de création)
+          const lastProject = projects.data[projects.data.length - 1];
+
+          // Récupérer l'ID de la colonne
+          const columns = await github.rest.projects.listColumns({
+            project_id: lastProject.id
+          });
+
+          const column = columns.data.find(c => c.name === columnName);
+          if (!column) {
+            throw new Error(`Colonne non trouvée: ${columnName}`);
+          }
+
+          // Ajouter l'issue au dernier projet créé
+          await github.rest.projects.createCard({
+            column_id: column.id,
+            content_id: context.payload.issue.id,
+            content_type: 'Issue'
+          });
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
